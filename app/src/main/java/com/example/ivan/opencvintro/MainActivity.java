@@ -1,5 +1,6 @@
 package com.example.ivan.opencvintro;
 
+import android.hardware.Camera;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -24,10 +25,14 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+
+import java.util.List;
 
 
 public class MainActivity extends AppCompatActivity implements CvCameraViewListener2,  View.OnTouchListener {
@@ -69,6 +74,17 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     //For Contour Extraction2
     private ColorBlobDetector    mDetector;
     private Scalar               CONTOUR_COLOR;
+    private Scalar               mBlobColorRgba;
+    private Scalar               mBlobColorHsv;
+    private Mat                  mSpectrum;
+    private Mat                  mAddedFrame;
+    private Size                 SPECTRUM_SIZE;
+    private Boolean              mIsColorSelected;
+    private Mat                  mContourFrame;
+    private Size                 OriginalSize;
+    private Size                 DownSize;
+    private int                  mHeight;
+    private int                  mWidth;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -160,21 +176,25 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     @Override
     public void onCameraViewStarted(int width, int height) {
         Log.d(TAG, "Width: " + width + " Height: " + height);
+        mHeight=height;
+        mWidth=width;
+
         mRgba = new Mat(height, width, CvType.CV_8UC4);
         mRgbaF = new Mat(height, width, CvType.CV_8UC4);
         mRgbaT = new Mat(width, width, CvType.CV_8UC4);
-        /*mCurrentFrame = new Mat();
-        mCurrentFrameHsv = new Mat();
-        mFilteredFrame = new Mat();
-        mInRangeResult = new Mat();*/
         mCurrentFrame = new Mat(height, width, CvType.CV_8UC4);
         mCurrentFrameHsv = new Mat(height, width, CvType.CV_8UC4);
         mFilteredFrame = new Mat(height, width, CvType.CV_8UC4);
         mInRangeResult = new Mat(height, width, CvType.CV_8UC4);
         previewRect = new Rect(0, 0, width, height);
-
+        OriginalSize = new Size(width, height);
         CONTOUR_COLOR = new Scalar(255,0,0,255);
+        mBlobColorRgba = new Scalar(255);
+        mBlobColorHsv = new Scalar(255);
         mDetector = new ColorBlobDetector();
+        mSpectrum = new Mat();
+        SPECTRUM_SIZE = new Size(200, 64);
+        mIsColorSelected = false;
     }
 
     @Override
@@ -185,19 +205,11 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         // TODO Auto-generated method stub
-        //mRgba = inputFrame.rgba();
-
-        // Rotate mRgba 90 degrees
-        /*
-        Core.transpose(mRgba, mRgbaT);
-        Imgproc.resize(mRgbaT, mRgbaF, mRgbaF.size(), 0,0, 0);
-        Core.flip(mRgbaF, mRgba, 1 );
-        */
         mCurrentFrame = inputFrame.rgba();
-        Imgproc.cvtColor(mCurrentFrame, mCurrentFrameHsv,Imgproc.COLOR_RGB2HSV);
 
-        if (mLowerColorLimit == null && mUpperColorLimit == null && mSelectedPoint != null) {
+        if (mIsColorSelected==false && mSelectedPoint!=null) {
             Log.d(TAG, "Start to retrieve Color limtis");
+            Imgproc.cvtColor(mCurrentFrame, mCurrentFrameHsv,Imgproc.COLOR_RGB2HSV);
             double[] selectedColor = mCurrentFrameHsv.get((int) mSelectedPoint.x, (int) mSelectedPoint.y);
             // We check the colors in a 5x5 pixels square (Region Of Interest) and get the average from that
             if (mSelectedPoint.x < 2) {
@@ -211,50 +223,50 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
                 mSelectedPoint.y = previewRect.height - 2;
             }
 
-            //Log.d(TAG, "Selected points, X: " + mSelectedPoint.x + " Y: " + mSelectedPoint.y);
-            //Log.d(TAG, "Current Matrix size, Cols: " + mCurrentFrameHsv.cols() + " Rows: " + mCurrentFrameHsv.rows());
-            // ROI (Region Of Interest) is used to find the average value around the point we clicked.
-            // This will reduce the risk of getting "freak" values if the pixel where we clicked has an unexpected value
-            //Rect roiRect = new Rect((int) (mSelectedPoint.x - 2), (int) (mSelectedPoint.y - 2), 5, 5);
             Rect roiRect = new Rect((int) (mSelectedPoint.x-2),(int) (mSelectedPoint.y-2),5,5);
-            // Get the Matrix representing the ROI
             Mat roi = mCurrentFrameHsv.submat(roiRect);
-                        
-            // Calculate the mean value of the the ROI matrix
-            Scalar sumColor = Core.mean(roi);
-            double[] sumColorValues = sumColor.val;
 
-            // Decide on the color range based on the mean value from the ROI
-            if (selectedColor != null) {
-                mLowerColorLimit = new Scalar(sumColorValues[0] - THRESHOLD_LOW * 3,
-                        sumColorValues[1] - THRESHOLD_LOW,
-                        sumColorValues[2] - THRESHOLD_LOW);
-                mUpperColorLimit = new Scalar(sumColorValues[0] + THRESHOLD_HIGH * 3,
-                        sumColorValues[1] + THRESHOLD_HIGH,
-                        sumColorValues[2] + THRESHOLD_HIGH);
-            }
+            //COLOR BLOB SEGMENTATION EXAMPLE
+            mBlobColorHsv = Core.sumElems(roi);
+            int pointCount = roiRect.width*roiRect.height;
+            for (int i = 0; i < mBlobColorHsv.val.length; i++)
+                mBlobColorHsv.val[i] /= pointCount;
+            mBlobColorRgba = convertScalarHsv2Rgba(mBlobColorHsv);
+            Log.i(TAG, "ROI rgba color: (" + mBlobColorRgba.val[0] + ", " + mBlobColorRgba.val[1] +
+                    ", " + mBlobColorRgba.val[2] + ", " + mBlobColorRgba.val[3] + ")");
+            mDetector.setHsvColor(mBlobColorHsv);
+            Imgproc.resize(mDetector.getSpectrum(), mSpectrum, SPECTRUM_SIZE);
+            mIsColorSelected = true;
+
             Log.d(TAG, "Retrieved Color limits");
+            mLowerColorLimit = mDetector.getmLowerBound();
+            mUpperColorLimit = mDetector.getmUpperBound();
         }
 
-        // If we have selected color, process the current frame using inRange function
-        if (mLowerColorLimit != null && mUpperColorLimit != null) {
-            Log.d(TAG, "Filtered matrix");
-            // Using the color limits to generate a mask (mInRangeResult)
+        if (mIsColorSelected) {
+            //Log.d(TAG, "Color selected, on camera frame");
+
+            //STEP 1: FILTER COLOUR FROM ORIGINAL IMAGE
+            Imgproc.cvtColor(mCurrentFrame, mCurrentFrameHsv,Imgproc.COLOR_RGB2HSV);
             Core.inRange(mCurrentFrameHsv, mLowerColorLimit, mUpperColorLimit, mInRangeResult);
-            // Clear (set to black) the filtered image frame
             mFilteredFrame.setTo(new Scalar(0, 0, 0));
-            // Copy the current frame in RGB to the filtered frame using the mask.
-            // Only the pixels in the mask will be copied.
             mCurrentFrame.copyTo(mFilteredFrame, mInRangeResult);
+            //STEP 2: RETRIEVE AND DISPLAY CONTOURS
+            mDetector.process(mInRangeResult);
+            List<MatOfPoint> contours = mDetector.getContours();
+            Imgproc.drawContours(mFilteredFrame, contours, -1, CONTOUR_COLOR, 3);
 
-            //Imgproc.Canny(mFilteredFrame, mCannyOutput,CANNY_THRESHOLD_1, CANNY_THRESHOLD_2);
-
+            Mat colorLabel = mFilteredFrame.submat(4, 68, 4, 68);
+            colorLabel.setTo(mBlobColorRgba);
+            Mat spectrumLabel = mFilteredFrame.submat(4, 4 + mSpectrum.rows(), 70, 70 + mSpectrum.cols());
+            mSpectrum.copyTo(spectrumLabel);
+            //STEP 3: RETURN PROCESSED IMAGE FOR DISPLAY
             return mFilteredFrame;
-            //return mCannyOutput;
         }else{
-            return mCurrentFrame;
-        }
 
+        return  mCurrentFrame;
+
+        }
     }
 
     @Override
@@ -270,6 +282,13 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mLowerColorLimit = null;
         mUpperColorLimit = null;
         mSelectedPoint = new Point(x, y);
+    }
+
+    private Scalar convertScalarHsv2Rgba(Scalar hsvColor) {
+        Mat pointMatRgba = new Mat();
+        Mat pointMatHsv = new Mat(1, 1, CvType.CV_8UC3, hsvColor);
+        Imgproc.cvtColor(pointMatHsv, pointMatRgba, Imgproc.COLOR_HSV2RGB_FULL, 4);
+        return new Scalar(pointMatRgba.get(0, 0));
     }
 
 }
