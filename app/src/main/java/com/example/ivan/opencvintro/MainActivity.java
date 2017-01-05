@@ -1,6 +1,10 @@
 package com.example.ivan.opencvintro;
 
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.pm.ConfigurationInfo;
 import android.hardware.Camera;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -35,7 +39,7 @@ import org.opencv.imgproc.Imgproc;
 import java.util.List;
 
 
-public class MainActivity extends AppCompatActivity implements CvCameraViewListener2,  View.OnTouchListener {
+public class MainActivity extends AppCompatActivity implements CvCameraViewListener2{
 
     // Used for logging success or failure messages
     private static final String TAG = "OCVSample::Activity";
@@ -53,23 +57,18 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     Mat mRgbaT;
 
     //For Color filtering
-    private Mat mInRangeResult;
-    private Mat mCurrentFrame;
-    private Mat mFilteredFrame;
-    private Mat mCurrentFrameHsv;
-    private Scalar mLowerColorLimit;
-    private Scalar mUpperColorLimit;
-    private Point mSelectedPoint = null;
-    Rect previewRect;
+    private Mat                 mInRangeResult;
+    private Mat                 mCurrentFrame;
+    private Mat                 mFilteredFrame;
+    private Mat                 mCurrentFrameHsv;
+    private Scalar              mLowerColorLimit;
+    private Scalar              mUpperColorLimit;
+    private Point               mSelectedPoint = null;
+    Rect                        previewRect;
 
     // The threshold value for the lower and upper color limits
     public static final double THRESHOLD_LOW = 35;
     public static final double THRESHOLD_HIGH = 35;
-
-    //For Contour Extraction
-    private Mat mCannyOutput;
-    public static final double CANNY_THRESHOLD_1 = 4000;
-    public static final double CANNY_THRESHOLD_2 = 4000;
 
     //For Contour Extraction2
     private ColorBlobDetector    mDetector;
@@ -77,14 +76,14 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     private Scalar               mBlobColorRgba;
     private Scalar               mBlobColorHsv;
     private Mat                  mSpectrum;
-    private Mat                  mAddedFrame;
     private Size                 SPECTRUM_SIZE;
     private Boolean              mIsColorSelected;
-    private Mat                  mContourFrame;
     private Size                 OriginalSize;
-    private Size                 DownSize;
     private int                  mHeight;
     private int                  mWidth;
+
+    //For openGL
+    private MainView mGLSurfaceView;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -93,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
                 case LoaderCallbackInterface.SUCCESS:
                 {
                     Log.i(TAG, "OpenCV loaded successfully");
-                    mOpenCvCameraView.enableView();
+                    //mOpenCvCameraView.enableView();
                 } break;
                 default:
                 {
@@ -113,15 +112,24 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         Log.i(TAG, "called onCreate");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        setContentView(R.layout.show_camera);
+        mGLSurfaceView = new MainView(this);
+        // Check if the system supports OpenGL ES 2.0.
+        final ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        final ConfigurationInfo configurationInfo = activityManager.getDeviceConfigurationInfo();
+        final boolean supportsEs2 = configurationInfo.reqGlEsVersion >= 0x20000;
+        if (supportsEs2)
+        {
+            Log.i(TAG, "OpenGL ES2 Supported");
+        }
+        else
+        {
+            // This is where you could create an OpenGL ES 1.x compatible
+            // renderer if you wanted to support both ES 1 and ES 2.
+            return;
+        }
 
-        mOpenCvCameraView = (JavaCameraView) findViewById(R.id.show_camera_activity_java_surface_view);
+        setContentView(mGLSurfaceView);
 
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-
-        mOpenCvCameraView.setCvCameraViewListener(this);
-
-        mOpenCvCameraView.setOnTouchListener(this);
     }
 
     @Override
@@ -269,6 +277,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         }
     }
 
+    /*
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
         int xSelected = (int) motionEvent.getX();
@@ -277,6 +286,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         setSelectedPoint(xSelected, ySelected);
         return false;
     }
+    */
 
     public void setSelectedPoint(double x, double y) {
         mLowerColorLimit = null;
