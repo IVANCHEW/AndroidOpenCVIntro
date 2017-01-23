@@ -39,7 +39,7 @@ import org.opencv.imgproc.Imgproc;
 import java.util.List;
 
 
-public class MainActivity extends AppCompatActivity implements CvCameraViewListener2{
+public class MainActivity extends AppCompatActivity implements CvCameraViewListener2, View.OnTouchListener{
 
     // Used for logging success or failure messages
     private static final String TAG = "OCVSample::Activity";
@@ -73,6 +73,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     //For Contour Extraction2
     private ColorBlobDetector    mDetector;
     private Scalar               CONTOUR_COLOR;
+    private Scalar               POINT_COLOR;
     private Scalar               mBlobColorRgba;
     private Scalar               mBlobColorHsv;
     private Mat                  mSpectrum;
@@ -81,6 +82,9 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     private Size                 OriginalSize;
     private int                  mHeight;
     private int                  mWidth;
+
+    //For Pose Estimation
+    private Mat                  cameraMatrix;
 
     //For openGL
     private MainView mGLSurfaceView;
@@ -92,7 +96,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
                 case LoaderCallbackInterface.SUCCESS:
                 {
                     Log.i(TAG, "OpenCV loaded successfully");
-                    //mOpenCvCameraView.enableView();
+                    mOpenCvCameraView.enableView();
                 } break;
                 default:
                 {
@@ -112,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         Log.i(TAG, "called onCreate");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        mGLSurfaceView = new MainView(this);
+        /*
         // Check if the system supports OpenGL ES 2.0.
         final ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         final ConfigurationInfo configurationInfo = activityManager.getDeviceConfigurationInfo();
@@ -127,8 +131,19 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             // renderer if you wanted to support both ES 1 and ES 2.
             return;
         }
-
+        mGLSurfaceView = new MainView(this);
         setContentView(mGLSurfaceView);
+        */
+
+        setContentView(R.layout.show_camera);
+
+        mOpenCvCameraView = (JavaCameraView) findViewById(R.id.show_camera_activity_java_surface_view);
+
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
+
+        mOpenCvCameraView.setCvCameraViewListener(this);
+
+        mOpenCvCameraView.setOnTouchListener(this);
 
     }
 
@@ -187,6 +202,8 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mHeight=height;
         mWidth=width;
 
+        cameraMatrix = new Mat(3,3,CvType.CV_16S);
+
         mRgba = new Mat(height, width, CvType.CV_8UC4);
         mRgbaF = new Mat(height, width, CvType.CV_8UC4);
         mRgbaT = new Mat(width, width, CvType.CV_8UC4);
@@ -197,6 +214,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         previewRect = new Rect(0, 0, width, height);
         OriginalSize = new Size(width, height);
         CONTOUR_COLOR = new Scalar(255,0,0,255);
+        POINT_COLOR = new Scalar(0, 255, 0 ,255);
         mBlobColorRgba = new Scalar(255);
         mBlobColorHsv = new Scalar(255);
         mDetector = new ColorBlobDetector();
@@ -251,6 +269,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             mUpperColorLimit = mDetector.getmUpperBound();
         }
 
+        //IMAGE PROCESSING SCHEME ONCE SEGMENTATION COLOR IS DETERMINED
         if (mIsColorSelected) {
             //Log.d(TAG, "Color selected, on camera frame");
 
@@ -259,9 +278,21 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             Core.inRange(mCurrentFrameHsv, mLowerColorLimit, mUpperColorLimit, mInRangeResult);
             mFilteredFrame.setTo(new Scalar(0, 0, 0));
             mCurrentFrame.copyTo(mFilteredFrame, mInRangeResult);
+
             //STEP 2: RETRIEVE AND DISPLAY CONTOURS
             mDetector.process(mInRangeResult);
             List<MatOfPoint> contours = mDetector.getContours();
+
+            for (int i =0; i<contours.size(); i++){
+                MatOfPoint c = new MatOfPoint(contours.get(i));
+                Point[] p = c.toArray();
+                Log.d(TAG,"Size of contour " + i + " is: " + p.length);
+                Log.d(TAG,"Points of contour are: ");
+                for (int j=0; j<p.length; j++) {
+                    Log.d(TAG, "Point " + j + " " + p[j]);
+                    Imgproc.circle(mFilteredFrame, p[j], 4, POINT_COLOR, 4);
+                }
+            }
             Imgproc.drawContours(mFilteredFrame, contours, -1, CONTOUR_COLOR, 3);
 
             Mat colorLabel = mFilteredFrame.submat(4, 68, 4, 68);
@@ -277,7 +308,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         }
     }
 
-    /*
+
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
         int xSelected = (int) motionEvent.getX();
@@ -286,7 +317,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         setSelectedPoint(xSelected, ySelected);
         return false;
     }
-    */
+
 
     public void setSelectedPoint(double x, double y) {
         mLowerColorLimit = null;

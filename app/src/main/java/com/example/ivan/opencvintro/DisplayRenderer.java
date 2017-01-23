@@ -23,7 +23,7 @@ import javax.microedition.khronos.opengles.GL10;
 /**
  * Created by ivan on 3/1/17.
  */
-public class DisplayRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener{
+public class DisplayRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener, Camera.PreviewCallback{
 
     private static final String TAG = "Display Renderer";
 
@@ -92,6 +92,7 @@ public class DisplayRenderer implements GLSurfaceView.Renderer, SurfaceTexture.O
         try {
             Log.d(TAG,"Renderer Start Camera");
             mCamera.setPreviewTexture(mSTexture);
+            mCamera.setPreviewCallback(this);
         } catch ( IOException ioe ) {
             Log.d(TAG,"Renderer Start Camera Error: " + ioe.toString());
         } catch (Exception e){
@@ -233,6 +234,10 @@ public class DisplayRenderer implements GLSurfaceView.Renderer, SurfaceTexture.O
         return program;
     }
 
+    @Override
+    public void onPreviewFrame(byte[] bytes, Camera camera) {
+        Log.d(TAG,"Preview Frame Callback");
+    }
 }
 
 
