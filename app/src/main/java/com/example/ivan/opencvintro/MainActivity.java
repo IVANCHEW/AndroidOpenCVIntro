@@ -26,16 +26,19 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -50,6 +53,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     // Used in Camera selection from menu (when implemented)
     private boolean              mIsJavaCamera = true;
     private MenuItem             mItemSwitchCamera = null;
+    private int                  itemSelected = 0;
 
     // These variables are used (at the moment) to fix camera orientation from 270degree to 0degree
     Mat mRgba;
@@ -82,6 +86,24 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     private Size                 OriginalSize;
     private int                  mHeight;
     private int                  mWidth;
+
+    //For Camera Callibration
+
+    private Size                mPatternSize;
+    private int                 mCornersSize;
+    private boolean             mPatternWasFound;
+    private MatOfPoint2f        mCorners;
+    /*
+    private List<Mat>           mCornersBuffer = new ArrayList<Mat>();
+    private boolean             mIsCalibrated = false;
+    private Mat                 mCameraMatrix = new Mat();
+    private Mat                 mDistortionCoefficients = new Mat();
+    private int                 mFlags;
+    private double              mRms;
+    private double              mSquareSize = 0.0181;
+    private Size                mImageSize;
+    */
+    private Mat                 greyScale;
 
     //For Pose Estimation
     private Mat                  cameraMatrix;
@@ -211,6 +233,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mCurrentFrameHsv = new Mat(height, width, CvType.CV_8UC4);
         mFilteredFrame = new Mat(height, width, CvType.CV_8UC4);
         mInRangeResult = new Mat(height, width, CvType.CV_8UC4);
+        greyScale = new Mat(height, width, CvType.CV_8UC4);
         previewRect = new Rect(0, 0, width, height);
         OriginalSize = new Size(width, height);
         CONTOUR_COLOR = new Scalar(255,0,0,255);
@@ -221,6 +244,11 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mSpectrum = new Mat();
         SPECTRUM_SIZE = new Size(200, 64);
         mIsColorSelected = false;
+
+        mPatternSize = new Size(9, 6);
+        mCornersSize = (int)(mPatternSize.width * mPatternSize.height);
+        mPatternWasFound = false;
+        mCorners = new MatOfPoint2f();
     }
 
     @Override
@@ -233,7 +261,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         // TODO Auto-generated method stub
         mCurrentFrame = inputFrame.rgba();
 
-        if (mIsColorSelected==false && mSelectedPoint!=null) {
+        if (mIsColorSelected==false && mSelectedPoint!=null && itemSelected==1) {
             Log.d(TAG, "Start to retrieve Color limtis");
             Imgproc.cvtColor(mCurrentFrame, mCurrentFrameHsv,Imgproc.COLOR_RGB2HSV);
             double[] selectedColor = mCurrentFrameHsv.get((int) mSelectedPoint.x, (int) mSelectedPoint.y);
@@ -301,7 +329,26 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             mSpectrum.copyTo(spectrumLabel);
             //STEP 3: RETURN PROCESSED IMAGE FOR DISPLAY
             return mFilteredFrame;
-        }else{
+        }
+        else if (mSelectedPoint != null && itemSelected == 0) {
+            //IMAGE CALLIBRATION TEST
+            Log.d(TAG,"Attempt to detect pattern size: " + mPatternSize.width + " by " + mPatternSize.height);
+            Imgproc.cvtColor(mCurrentFrame, greyScale, Imgproc.COLOR_BGR2GRAY);
+            //mPatternWasFound = Calib3d.findChessboardCorners(greyScale, mPatternSize, mCorners);
+            //mPatternWasFound = Calib3d.findCirclesGrid(greyScale, mPatternSize, mCorners, Calib3d.CALIB_CB_ASYMMETRIC_GRID);
+            mPatternWasFound = Calib3d.findChessboardCorners(greyScale, mPatternSize, mCorners,
+                    Calib3d.CALIB_CB_ADAPTIVE_THRESH + Calib3d.CALIB_CB_NORMALIZE_IMAGE + Calib3d.CALIB_CB_FAST_CHECK);
+            if(mPatternWasFound){
+                Log.d(TAG,"Pattern found");
+                Log.d(TAG,"Size of corners: " + mCorners.size());
+                Calib3d.drawChessboardCorners(greyScale, mPatternSize, mCorners, mPatternWasFound);
+            }else{
+                Log.d(TAG,"Unable to find pattern");
+                Log.d(TAG,"Size of corners: " + mCorners.size());
+            }
+            return greyScale;
+        }
+        else{
 
         return  mCurrentFrame;
 
