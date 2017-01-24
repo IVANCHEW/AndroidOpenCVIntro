@@ -32,7 +32,9 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
+import org.opencv.core.Point3;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
@@ -88,16 +90,23 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     private int                  mWidth;
 
     //For Camera Callibration
-
+    private int                 numCornersHor;
+    private int                 numCornersVer;
     private Size                mPatternSize;
+    private MatOfPoint3f        obj;
+    private int                 numSquares;
     private int                 mCornersSize;
     private boolean             mPatternWasFound;
     private MatOfPoint2f        mCorners;
+    private List<Mat>           imagePoints;
+    private List<Mat>           objectPoints;
+    private Mat                 intrinsic;
+    private Mat                 distCoeffs;
+    private int                 callibrationFrameCount;
+    private boolean             callibratedCamera;
     /*
     private List<Mat>           mCornersBuffer = new ArrayList<Mat>();
     private boolean             mIsCalibrated = false;
-    private Mat                 mCameraMatrix = new Mat();
-    private Mat                 mDistortionCoefficients = new Mat();
     private int                 mFlags;
     private double              mRms;
     private double              mSquareSize = 0.0181;
@@ -224,8 +233,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mHeight=height;
         mWidth=width;
 
-        cameraMatrix = new Mat(3,3,CvType.CV_16S);
-
+        //COLOR FILTER PARAMETERS
         mRgba = new Mat(height, width, CvType.CV_8UC4);
         mRgbaF = new Mat(height, width, CvType.CV_8UC4);
         mRgbaT = new Mat(width, width, CvType.CV_8UC4);
@@ -233,7 +241,6 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mCurrentFrameHsv = new Mat(height, width, CvType.CV_8UC4);
         mFilteredFrame = new Mat(height, width, CvType.CV_8UC4);
         mInRangeResult = new Mat(height, width, CvType.CV_8UC4);
-        greyScale = new Mat(height, width, CvType.CV_8UC4);
         previewRect = new Rect(0, 0, width, height);
         OriginalSize = new Size(width, height);
         CONTOUR_COLOR = new Scalar(255,0,0,255);
@@ -245,10 +252,24 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         SPECTRUM_SIZE = new Size(200, 64);
         mIsColorSelected = false;
 
-        mPatternSize = new Size(9, 6);
+        //CAMERA CALLIBRATION PARAMETERS
+        greyScale = new Mat(height, width, CvType.CV_8UC4);
+        callibrationFrameCount = 0;
+        callibratedCamera = false;
+        numCornersHor = 9;
+        numCornersVer = 6;
+        numSquares = numCornersHor * numCornersVer;
+        obj = new MatOfPoint3f();
+        for (int j = 0; j < numSquares; j++)
+            obj.push_back(new MatOfPoint3f(new Point3(j / numCornersHor, j % numCornersVer, 0.0f)));
+        mPatternSize = new Size(numCornersHor, numCornersVer);
         mCornersSize = (int)(mPatternSize.width * mPatternSize.height);
         mPatternWasFound = false;
         mCorners = new MatOfPoint2f();
+        imagePoints = new ArrayList<>();
+        objectPoints = new ArrayList<>();
+        intrinsic = new Mat(3, 3, CvType.CV_32FC1);
+        distCoeffs = new Mat();
     }
 
     @Override
@@ -261,10 +282,11 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         // TODO Auto-generated method stub
         mCurrentFrame = inputFrame.rgba();
 
+        //COLOR SELECTING CODE
         if (mIsColorSelected==false && mSelectedPoint!=null && itemSelected==1) {
             Log.d(TAG, "Start to retrieve Color limtis");
             Imgproc.cvtColor(mCurrentFrame, mCurrentFrameHsv,Imgproc.COLOR_RGB2HSV);
-            double[] selectedColor = mCurrentFrameHsv.get((int) mSelectedPoint.x, (int) mSelectedPoint.y);
+
             // We check the colors in a 5x5 pixels square (Region Of Interest) and get the average from that
             if (mSelectedPoint.x < 2) {
                 mSelectedPoint.x = 2;
@@ -277,6 +299,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
                 mSelectedPoint.y = previewRect.height - 2;
             }
 
+            double[] selectedColor = mCurrentFrameHsv.get((int) mSelectedPoint.x, (int) mSelectedPoint.y);
             Rect roiRect = new Rect((int) (mSelectedPoint.x-2),(int) (mSelectedPoint.y-2),5,5);
             Mat roi = mCurrentFrameHsv.submat(roiRect);
 
@@ -295,6 +318,45 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             Log.d(TAG, "Retrieved Color limits");
             mLowerColorLimit = mDetector.getmLowerBound();
             mUpperColorLimit = mDetector.getmUpperBound();
+        }
+
+        //CAMERA CALLIBRATION
+        if (callibrationFrameCount==11 && !callibratedCamera){
+
+            List<Mat> rvecs = new ArrayList<>();
+            List<Mat> tvecs = new ArrayList<>();
+            intrinsic.put(0, 0, 1);
+            intrinsic.put(1, 1, 1);
+            Calib3d.calibrateCamera(objectPoints, imagePoints, greyScale.size(), intrinsic, distCoeffs, rvecs, tvecs);
+            callibratedCamera = true;
+            Log.d(TAG, "Camera Callibrated, intrinsic parameters: ");
+
+
+            int tempcount = 0;
+            for (int i=0 ; i<intrinsic.size().height ; i++) {
+                for(int j=0 ; j<intrinsic.size().width ; j++){
+                    double tempPrint[] = intrinsic.get(i,j);
+                    Log.d(TAG, "Length of double: " + tempPrint.length);
+                    for (int k=0 ; k<tempPrint.length ; k++) {
+                        Log.d(TAG, "Param: " + tempcount + " " + tempPrint[k]);
+                        tempcount = tempcount + 1;
+                    }
+                }
+            }
+
+            Log.d(TAG, "Distortion Coefficients: ");
+            tempcount = 0;
+            for (int i=0 ; i<distCoeffs.size().height ; i++) {
+                for(int j=0 ; j<distCoeffs.size().width ; j++){
+                    double tempPrint[] = distCoeffs.get(i,j);
+                    Log.d(TAG, "Length of double: " + tempPrint.length);
+                    for (int k=0 ; k<tempPrint.length ; k++) {
+                        Log.d(TAG, "Param: " + tempcount + " " + tempPrint[k]);
+                        tempcount = tempcount + 1;
+                    }
+                }
+            }
+
         }
 
         //IMAGE PROCESSING SCHEME ONCE SEGMENTATION COLOR IS DETERMINED
@@ -330,7 +392,8 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             //STEP 3: RETURN PROCESSED IMAGE FOR DISPLAY
             return mFilteredFrame;
         }
-        else if (mSelectedPoint != null && itemSelected == 0) {
+
+        else if (mSelectedPoint != null && itemSelected == 0 && callibrationFrameCount<11) {
             //IMAGE CALLIBRATION TEST
             Log.d(TAG,"Attempt to detect pattern size: " + mPatternSize.width + " by " + mPatternSize.height);
             Imgproc.cvtColor(mCurrentFrame, greyScale, Imgproc.COLOR_BGR2GRAY);
@@ -339,18 +402,24 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
             mPatternWasFound = Calib3d.findChessboardCorners(greyScale, mPatternSize, mCorners,
                     Calib3d.CALIB_CB_ADAPTIVE_THRESH + Calib3d.CALIB_CB_NORMALIZE_IMAGE + Calib3d.CALIB_CB_FAST_CHECK);
             if(mPatternWasFound){
+                Calib3d.drawChessboardCorners(greyScale, mPatternSize, mCorners, mPatternWasFound);
+                imagePoints.add(mCorners);
+                objectPoints.add(obj);
+                callibrationFrameCount = callibrationFrameCount + 1;
                 Log.d(TAG,"Pattern found");
                 Log.d(TAG,"Size of corners: " + mCorners.size());
-                Calib3d.drawChessboardCorners(greyScale, mPatternSize, mCorners, mPatternWasFound);
+                Log.d(TAG, "Number of callibration frames: " + callibrationFrameCount);
             }else{
                 Log.d(TAG,"Unable to find pattern");
                 Log.d(TAG,"Size of corners: " + mCorners.size());
             }
+            mPatternWasFound = false;
             return greyScale;
         }
+
         else{
 
-        return  mCurrentFrame;
+            return  mCurrentFrame;
 
         }
     }
