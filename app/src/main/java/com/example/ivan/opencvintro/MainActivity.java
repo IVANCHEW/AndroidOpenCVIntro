@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
     // Used in Camera selection from menu (when implemented)
     private boolean              mIsJavaCamera = true;
     private MenuItem             mItemSwitchCamera = null;
-    private int                  itemSelected = 0;
+    private int                  itemSelected = 1;
 
     // These variables are used (at the moment) to fix camera orientation from 270degree to 0degree
     Mat mRgba;
@@ -234,42 +234,42 @@ public class MainActivity extends AppCompatActivity implements CvCameraViewListe
         mWidth=width;
 
         //COLOR FILTER PARAMETERS
-        mRgba = new Mat(height, width, CvType.CV_8UC4);
-        mRgbaF = new Mat(height, width, CvType.CV_8UC4);
-        mRgbaT = new Mat(width, width, CvType.CV_8UC4);
-        mCurrentFrame = new Mat(height, width, CvType.CV_8UC4);
-        mCurrentFrameHsv = new Mat(height, width, CvType.CV_8UC4);
-        mFilteredFrame = new Mat(height, width, CvType.CV_8UC4);
-        mInRangeResult = new Mat(height, width, CvType.CV_8UC4);
-        previewRect = new Rect(0, 0, width, height);
-        OriginalSize = new Size(width, height);
-        CONTOUR_COLOR = new Scalar(255,0,0,255);
-        POINT_COLOR = new Scalar(0, 255, 0 ,255);
-        mBlobColorRgba = new Scalar(255);
-        mBlobColorHsv = new Scalar(255);
-        mDetector = new ColorBlobDetector();
-        mSpectrum = new Mat();
-        SPECTRUM_SIZE = new Size(200, 64);
-        mIsColorSelected = false;
+        mRgba                   = new Mat(height, width, CvType.CV_8UC4);
+        mRgbaF                  = new Mat(height, width, CvType.CV_8UC4);
+        mRgbaT                  = new Mat(width, width, CvType.CV_8UC4);
+        mCurrentFrame           = new Mat(height, width, CvType.CV_8UC4);
+        mCurrentFrameHsv        = new Mat(height, width, CvType.CV_8UC4);
+        mFilteredFrame          = new Mat(height, width, CvType.CV_8UC4);
+        mInRangeResult          = new Mat(height, width, CvType.CV_8UC4);
+        previewRect             = new Rect(0, 0, width, height);
+        OriginalSize            = new Size(width, height);
+        CONTOUR_COLOR           = new Scalar(255,0,0,255);
+        POINT_COLOR             = new Scalar(0, 255, 0 ,255);
+        mBlobColorRgba          = new Scalar(255);
+        mBlobColorHsv           = new Scalar(255);
+        mDetector               = new ColorBlobDetector();
+        mSpectrum               = new Mat();
+        SPECTRUM_SIZE           = new Size(200, 64);
+        mIsColorSelected        = false;
 
         //CAMERA CALLIBRATION PARAMETERS
-        greyScale = new Mat(height, width, CvType.CV_8UC4);
-        callibrationFrameCount = 0;
-        callibratedCamera = false;
-        numCornersHor = 9;
-        numCornersVer = 6;
-        numSquares = numCornersHor * numCornersVer;
-        obj = new MatOfPoint3f();
+        greyScale               = new Mat(height, width, CvType.CV_8UC4);
+        callibrationFrameCount  = 0;
+        callibratedCamera       = false;
+        numCornersHor           = 9;
+        numCornersVer           = 6;
+        numSquares              = numCornersHor * numCornersVer;
+        obj                     = new MatOfPoint3f();
         for (int j = 0; j < numSquares; j++)
             obj.push_back(new MatOfPoint3f(new Point3(j / numCornersHor, j % numCornersVer, 0.0f)));
-        mPatternSize = new Size(numCornersHor, numCornersVer);
-        mCornersSize = (int)(mPatternSize.width * mPatternSize.height);
-        mPatternWasFound = false;
-        mCorners = new MatOfPoint2f();
-        imagePoints = new ArrayList<>();
-        objectPoints = new ArrayList<>();
-        intrinsic = new Mat(3, 3, CvType.CV_32FC1);
-        distCoeffs = new Mat();
+        mPatternSize            = new Size(numCornersHor, numCornersVer);
+        mCornersSize            = (int)(mPatternSize.width * mPatternSize.height);
+        mPatternWasFound        = false;
+        mCorners                = new MatOfPoint2f();
+        imagePoints             = new ArrayList<>();
+        objectPoints            = new ArrayList<>();
+        intrinsic               = new Mat(3, 3, CvType.CV_32FC1);
+        distCoeffs              = new Mat();
     }
 
     @Override
